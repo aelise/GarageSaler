@@ -1,2 +1,5 @@
 # ignore user values
 user_values.txt
+
+*.pyc
+*-checkpoint.ipynb
