@@ -88,7 +88,8 @@ class GarageSale(Sale):
 
 def plotsalemap(saleslist, apikey, home):
     """Plot all sales in saleslist using the static google maps API
-       Returns url for API request"""
+       Returns url for API request
+    """
 
     baseurl = 'https://maps.googleapis.com/maps/api/staticmap?'
 
@@ -107,8 +108,8 @@ def plotsalemap(saleslist, apikey, home):
     return new.url
 
 def plotroute(saleslist, apikey, home):
-    """ Plots route in google static map
-    TODO: return text turn-by-turn directions
+    """ Plots optimal route in google static map
+        TODO: return text turn-by-turn directions
     """
     baseurl = plotsalemap(saleslist, apikey, home)
 
@@ -125,7 +126,9 @@ def plotroute(saleslist, apikey, home):
 
 
 def getwalkingroute(apikey, home, sales, triplength):
-    """ """
+    """ Returns a list of waypoints in an optimal walking route
+        which starts and ends at the users home address (home).
+    """
     g = goo.Client(apikey)
 
     # drop sales greater than (triplength) miles away from home
@@ -180,11 +183,15 @@ def main():
         (Sale.homelat, Sale.homelng) = \
                 sale_info_list[0].getlatlng(Sale.homeaddr)
 
+    # Get walking route from home to sale(s) and back home
     waypoints = getwalkingroute(Sale.gmaps_apikey, Sale.homeaddr, \
                                 sale_info_list, 17000)
 
+    # Plot all sales within walking distance
     myurl = plotsalemap(waypoints.tolist(), Gstaticmap_apikey, Sale.homeaddr)
     webbrowser.open(myurl)
+
+    # Plot walking route
     myurl = plotroute(waypoints[:3,0:2].tolist(), Gstaticmap_apikey, Sale.homeaddr)
     webbrowser.open(myurl)
 
