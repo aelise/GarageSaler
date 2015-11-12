@@ -12,6 +12,7 @@ import webbrowser
 
 #temp imports for dev and debug
 import json
+import pdb
 
 
 class Sale(object):
@@ -27,7 +28,6 @@ class Sale(object):
         # Init vars
         self.rawtext = text
         self.straddress = None
-        self.zipcode = None
         self.url = None
         self.happeningnow = None
         self.pictures = None
@@ -39,13 +39,21 @@ class Sale(object):
         self.sale_info(text)
 
     def formatted_address(self, addy):
+        addy = addy.replace('<br/>','+')
         return addy.strip().strip(',').strip('.').replace(' ', '+')
 
     def getlatlng(self, address):
-        g = goo.Client(key=Sale.gmaps_apikey)
+        g = goo.Client(key=self.gmaps_apikey)
         ll = g.geocode(address, components={'country':'US'})
         return (ll[0]['geometry']['location']['lat'], \
                 ll[0]['geometry']['location']['lng'])
+
+    def getdist2home(self):
+        g = goo.Client(key=self.gmaps_apikey)
+        distmat = g.distance_matrix(self.homeaddr, self.straddress, \
+                                    mode='walking')
+        self.distancetohome = distmat['rows'][0]['elements'][0]['distance']['value']
+        return self.distancetohome
 
 
 class EstateSale(Sale):
@@ -58,17 +66,15 @@ class EstateSale(Sale):
             return None
 
         ur = es.select('h3 > a')
-        street = es.find('span',attrs={'id':re.compile('.*straddressSpan.*')})
-        zc = es.find('span',attrs={'id':re.compile('.*PostalCodeSpan.*')})
-        if not ur or not street or not zc:
+        street = es.find('div',attrs={'id':re.compile('.*PrintableAddress.*')})
+        if not ur or not street:
             print "Whoops"
             return None
 
-        self.zipcode = zc.text
-        if street.text != '' and self.zipcode is not None:
+        if street.text != '':
             self.straddress = self.formatted_address(street.text)
-            (self.lat, self.lng) = self.getlatlng(self.straddress \
-                                    +','+self.zipcode)
+            (self.lat, self.lng) = self.getlatlng(self.straddress)
+            self.getdist2home()
         self.url   = 'http://www.estatesales.net' + ur[0]['href']
         self.happeningnow = now[0].text
 
@@ -101,14 +107,14 @@ def plotsalemap(saleslist, apikey, home):
     return new.url
 
 def plotroute(saleslist, apikey, home):
-    """ Next TO DO: actually turn this into a function that plots
-    (and prints) the route
+    """ Plots route in google static map
+    TODO: return text turn-by-turn directions
     """
     baseurl = plotsalemap(saleslist, apikey, home)
 
     # get optimal route from Google
     route = goo.Client(apikey).directions(home, home, mode='walking', \
-                                          waypoints=saleslist.tolist(), \
+                                          waypoints=saleslist, \
                                           optimize_waypoints='True')
 
     #get encoded polyline from route, put it in myparams = {'enc' : polyline}
@@ -118,17 +124,14 @@ def plotroute(saleslist, apikey, home):
     return new.url
 
 
-def getwalkingroute(apikey, home, latlng, triplength):
+def getwalkingroute(apikey, home, sales, triplength):
     """ """
     g = goo.Client(apikey)
 
     # drop sales greater than (triplength) miles away from home
-    distmat = g.distance_matrix(home, latlng, mode='walking')
-    dist2home = np.array([x['distance']['value'] for x in \
-                          distmat['rows'][0]['elements']])
-    latlng = np.array(latlng)
-    wp = np.c_[ latlng[dist2home<(triplength)] ,
-                   dist2home[dist2home<(triplength)] ]
+    wp = np.array([(es.lat, es.lng, es.distancetohome) for es in sales \
+                         if es.lat is not None
+                         and es.distancetohome < triplength])
 
     # If more than 8 waypoints remaining, choose the 8 closest to home
     if len(wp)>8:
@@ -153,11 +156,15 @@ def getwalkingroute(apikey, home, latlng, triplength):
     return wp
 
 
-def main():
-    """ """
+def getdata():
     r = requests.get('http://www.estatesales.net/GA/Decatur/30033')
     soup = BeautifulSoup(r.text,'html5lib')
     sales = soup.find_all('section', attrs={'class':'saleItem'})
+    return sales
+
+def main():
+    """ """
+    sales = getdata()
 
     # Get user-specific values from file
     with open('user_values.txt') as myfile:
@@ -173,20 +180,12 @@ def main():
         (Sale.homelat, Sale.homelng) = \
                 sale_info_list[0].getlatlng(Sale.homeaddr)
 
-    # Compile info in usable format for mapping
-    latlongs_str = [(str(es.lat)+','+str(es.lng)) for es in sale_info_list \
-                    if es.lat is not None]
-    latlongs_tup = [(es.lat,es.lng) for es in sale_info_list if es.lat \
-                    is not None]
-
     waypoints = getwalkingroute(Sale.gmaps_apikey, Sale.homeaddr, \
-                                latlongs_tup, 17000)
+                                sale_info_list, 17000)
 
-    #myurl = plotsalemap(latlongs_str[:30], Gstaticmap_apikey, Sale.homeaddr)
-    #webbrowser.open(myurl)
     myurl = plotsalemap(waypoints.tolist(), Gstaticmap_apikey, Sale.homeaddr)
     webbrowser.open(myurl)
-    myurl = plotroute(waypoints.tolist(), Gstaticmap_apikey, Sale.homeaddr)
+    myurl = plotroute(waypoints[:3,0:2].tolist(), Gstaticmap_apikey, Sale.homeaddr)
     webbrowser.open(myurl)
 
 
