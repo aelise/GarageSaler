@@ -68,7 +68,7 @@ class EstateSale(Sale):
         ur = es.select('h3 > a')
         street = es.find('div',attrs={'id':re.compile('.*PrintableAddress.*')})
         if not ur or not street:
-            print "Whoops"
+            print("Whoops")
             return None
 
         if street.text != '':
@@ -93,7 +93,7 @@ def plotsalemap(saleslist, apikey, home):
 
     baseurl = 'https://maps.googleapis.com/maps/api/staticmap?'
 
-    if isinstance(saleslist[0], basestring):
+    if isinstance(saleslist[0], str):
         markers = ['color:blue|label:S|' + x for x in saleslist if x != '']
     else:
         markers = ['color:blue|label:S|' + str(x[0]) + ',' + str(x[1]) \
@@ -152,7 +152,7 @@ def getwalkingroute(apikey, home, sales, triplength):
         temptriplen = sum([i['distance']['value'] for i in route[0]['legs']])
         if temptriplen > 2*triplength:
             wp = wp[wp[:,2]<max(wp[:,2])]
-            print wp
+            print(wp)
         else:
             bestroute = True
 
